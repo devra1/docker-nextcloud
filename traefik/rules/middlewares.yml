@@ -1,0 +1,34 @@
+http:
+  middlewares:
+    middlewares-basic-auth:
+      basicAuth:
+        usersFile: "/shared/.htpasswd"
+        realm: "Traefik 2 Basic Auth"
+
+    middlewares-rate-limit:
+      rateLimit:
+        average: 100
+        burst: 50
+
+    middlewares-secure-headers:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - OPTIONS
+          - PUT
+        accessControlMaxAge: 100
+        hostsProxyHeaders:
+          - "X-Forwarded-Host"
+        sslRedirect: true
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+        customFrameOptionsValue: "allow-from https:example.com" #CSP takes care of this but may be needed for organizr.
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "same-origin"
+        featurePolicy: "camera 'none'; geolocation 'none'; microphone 'none'; payment 'none'; usb 'none'; vr 'none';"
+        customResponseHeaders:
+          X-Robots-Tag: "none,noarchive,nosnippet,notranslate,noimageindex,"
+          server: ""
