@@ -1,0 +1,93 @@
+#-----------------------------------------------------------------------------
+#   NEXTCLOUD.YML
+#   =============
+#     This requires TRAEFIK to be already running. 
+#
+#     Containers :
+#     ============
+#     nextcloud-app
+#     nextcloud-redis
+#     nextcloud-db
+#-----------------------------------------------------------------------------
+
+version: '3'
+
+#---------------------------------------------------
+# Networks
+#---------------------------------------------------
+networks:
+  t2_proxy:
+    external:
+      name: t2_proxy
+  default:
+    driver: bridge
+
+#---------------------------------------------------
+# Services
+#---------------------------------------------------
+services:
+
+  #NEXTCLOUD
+  nextcloud-db:
+    container_name: nextcloud-db
+    image: mysql
+    command: --transaction-isolation=READ-COMMITTED --log-bin=ROW
+    security_opt: 
+      - seccomp:unconfined      # Needed to stop errors "mbind: Operation not permitted"
+    restart: unless-stopped
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ${DOCKERDIR}/nextcloud/database:/var/lib/mysql
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
+      - MYSQL_PASSWORD=$MYSQL_PASSWORD          
+      - MYSQL_DATABASE=$MYSQL_DATABASE          
+      - MYSQL_USER=$MYSQL_USER                  
+      - MYSQL_INITDB_SKIP_TZINFO=1 
+    networks:
+      - t2_proxy
+
+  nextcloud-redis:
+    container_name: nextcloud-redis
+    image: redis:alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    hostname: nextcloud-redis
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    networks:
+        - t2_proxy
+
+  nextcloud-app:
+    container_name: nextcloud-app
+    image: nextcloud
+    depends_on:
+      - nextcloud-db
+      - nextcloud-redis
+    environment:
+        REDIS_HOST: nextcloud-redis
+        REDIS_HOST_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - ${DOCKERDIR}/nextcloud/app:/var/www/html
+      - ${DOCKERDIR}/nextcloud/data:/var/www/html/data
+    restart: unless-stopped
+    networks:
+      - t2_proxy
+    labels:
+      - "traefik.enable=true"
+      ## HTTP Routers
+      - "traefik.http.routers.nextcloud-rtr.entrypoints=https"
+      - "traefik.http.routers.nextcloud-rtr.rule=Host(`nextcloud.$DOMAINNAME`)"
+      - "traefik.http.routers.nextcloud-rtr.tls=true"
+      ## Middlewares
+      - "traefik.http.routers.nextcloud-rtr.middlewares=chain-no-auth@file"
+      ## HTTP Services
+      - "traefik.http.routers.nextcloud-rtr.service=nextcloud-svc"
+      - "traefik.http.services.nextcloud-svc.loadbalancer.server.port=80"
+   
